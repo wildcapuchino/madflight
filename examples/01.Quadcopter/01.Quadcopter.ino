@@ -169,8 +169,8 @@ float Ki_ro_pi_angle  = 0.1;      //Roll/Pitch I-gain - angle mode
 float Kd_ro_pi_angle  = 0.05;     //Roll/Pitch D-gain - angle mode (has no effect on control_Angle2)
 float B_loop_ro_pi    = 0.9;      //Roll/Pitch damping term for control_Angle2(), lower is more damping (must be between 0 to 1)
 
-float Kp_ro_pi_rate   = 0.15;     //Roll/Pitch P-gain - rate mode
-float Ki_ro_pi_rate   = 0.2;      //Roll/Pitch I-gain - rate mode
+float Kp_ro_pi_rate   = 0.15;     //Roll/Pitch P-gain - rate mode (default: 0.15)
+float Ki_ro_pi_rate   = 0.2;      //Roll/Pitch I-gain - rate mode (default: 0.2)
 float Kd_ro_pi_rate   = 0.0002;   //Roll/Pitch D-gain - rate mode (be careful when increasing too high, motors will begin to overheat!)
 
 float Kp_yaw          = 0.3;       //Yaw P-gain
@@ -248,7 +248,7 @@ void setup() {
   for(int i=0;i<out_MOTOR_COUNT;i++) {
     //uncomment one line - sets pin, frequency (Hz), minimum (us), maximum (us)
     //out[i].begin(HW_PIN_OUT[i], 400, 950, 2000); //Standard PWM: 400Hz, 950-2000 us
-    out[i].begin(HW_PIN_OUT[i], 400, 10, 2000); //Standard PWM: 400Hz, 950-2000 us
+    out[i].begin(HW_PIN_OUT[i], 400, 10, 2000); //Brushed motor PWM driver: 400Hz, 10-2000 us
     //out[i].begin(HW_PIN_OUT[i], 2000, 125, 250); //Oneshot125: 2000Hz, 125-250 us
 
     out_command[i] = 0; //set output to 0 for motors
@@ -302,11 +302,11 @@ void imu_loop() {
   rcin_Normalize(); //Convert raw commands to normalized values based on saturated control limits
 
   //Uncomment to debug without remote (and no battery!) - pitch drone up: motors m1,m3 should increase and m2,m4 decrease; bank right: m1,m2 increase; yaw right: m1,m4 increase
-  rcin_thro = 0.5; rcin_thro_is_low = false; rcin_roll = 0; rcin_pitch = 0; rcin_yaw = 0; rcin_armed = true; rcin_aux = 0; out_armed = true;
+  //rcin_thro = 0.5; rcin_thro_is_low = false; rcin_roll = 0; rcin_pitch = 0; rcin_yaw = 0; rcin_armed = true; rcin_aux = 0; out_armed = true;
 
   //PID Controller RATE or ANGLE - SELECT ONE:
-  control_Rate(rcin_thro_is_low); //Stabilize on rate setpoint
-  //control_Angle(rcin_thro_is_low); //Stabilize on pitch/roll angle setpoint, stabilize yaw on rate setpoint  //control_Angle2(rcin_thro_is_low); //Stabilize on pitch/roll setpoint using cascaded method. Rate controller must be tuned well first!
+  //control_Rate(rcin_thro_is_low); //Stabilize on rate setpoint
+  control_Angle(rcin_thro_is_low); //Stabilize on pitch/roll angle setpoint, stabilize yaw on rate setpoint  //control_Angle2(rcin_thro_is_low); //Stabilize on pitch/roll setpoint using cascaded method. Rate controller must be tuned well first!
 
   //Actuator mixing
   control_Mixer(); //Mixes PID outputs to scaled actuator commands -- custom mixing assignments done here
@@ -404,7 +404,7 @@ void rcin_Normalize() {
 
   //arm switch
   pwm = rcin_pwm[rcin_cfg_arm_channel-1];
-  //rcin_armed = (rcin_cfg_arm_min <= pwm && pwm <= rcin_cfg_arm_max);
+  rcin_armed = (rcin_cfg_arm_min <= pwm && pwm <= rcin_cfg_arm_max);
 }
 
 //helper to nomalize a channel based on min,center,max calibration
@@ -577,7 +577,7 @@ void out_KillSwitchAndFailsafe() {
   }
 
   //Change to DISARMED when radio armed switch is in disarmed position, or if radio lost connection
-   if (out_armed && (!rcin_armed)){// || !rcin.connected())) {
+   if (out_armed && (!rcin_armed) || (!rcin.connected())) {
     out_armed = false;
     if(!rcin_armed) {
       Serial.println("OUT: DISARMED (arm switch)");
