@@ -93,11 +93,16 @@ Copyright (c) 2022 Nicholas Rehm - dRehmFlight
 //========================================================================================================================//
 
 //--- RC RECEIVER
-#define RCIN_USE  RCIN_USE_CRSF //RCIN_USE_CRSF, RCIN_USE_SBUS, RCIN_USE_DSM, RCIN_USE_PPM, RCIN_USE_PWM
+#define RCIN_USE  RCIN_USE_PWM //RCIN_USE_CRSF, RCIN_USE_SBUS, RCIN_USE_DSM, RCIN_USE_PPM, RCIN_USE_PWM
 #define RCIN_NUM_CHANNELS 5 //number of receiver channels (minimal 5)
-
+#define ch1Pin 10
+#define ch2Pin 11
+#define ch3Pin 12
+#define ch4Pin 13
+#define ch5Pin 14
+#define ch6Pin 15
 //--- IMU SENSOR
-#define IMU_USE  IMU_USE_SPI_MPU6500 // IMU_USE_SPI_BMI270, IMU_USE_SPI_MPU9250, IMU_USE_SPI_MPU6500, IMU_USE_SPI_MPU6000, IMU_USE_I2C_MPU9250, IMU_USE_I2C_MPU9150, IMU_USE_I2C_MPU6500, IMU_USE_I2C_MPU6050, IMU_USE_I2C_MPU6000
+#define IMU_USE  IMU_USE_SPI_MPU9250 // IMU_USE_SPI_BMI270, IMU_USE_SPI_MPU9250, IMU_USE_SPI_MPU6500, IMU_USE_SPI_MPU6000, IMU_USE_I2C_MPU9250, IMU_USE_I2C_MPU9150, IMU_USE_I2C_MPU6500, IMU_USE_I2C_MPU6050, IMU_USE_I2C_MPU6000
 //Set sensor orientation. The label is yaw / roll (in that order) needed to rotate the sensor from it's normal position to it's mounted position.
 //If not sure what is needed: use CLI 'proll' and try each setting until roll-right gives positive ahrs_roll, pitch-up gives positive ahrs_pitch, and yaw-right gives positive ahrs_yaw
 #define IMU_ALIGN  IMU_ALIGN_CW0 //IMU_ALIGN_CW0, IMU_ALIGN_CW90, IMU_ALIGN_CW180, IMU_ALIGN_CW270, IMU_ALIGN_CW0FLIP, IMU_ALIGN_CW90FLIP, IMU_ALIGN_CW180FLIP, IMU_ALIGN_CW270FLIP
@@ -108,14 +113,14 @@ Copyright (c) 2022 Nicholas Rehm - dRehmFlight
 //========================================================================================================================//
 
 //set channels
-const int rcin_cfg_thro_channel  = 1; //low pwm = zero throttle/stick back, high pwm = full throttle/stick forward
-const int rcin_cfg_roll_channel  = 2; //low pwm = left, high pwm = right
-const int rcin_cfg_pitch_channel = 3; //low pwm = pitch up/stick back, high pwm = pitch down/stick forward
-const int rcin_cfg_yaw_channel   = 4; //low pwm = left, high pwm = right
-const int rcin_cfg_arm_channel   = 5; //ARM/DISARM switch
+const int rcin_cfg_thro_channel  = 3; //low pwm = zero throttle/stick back, high pwm = full throttle/stick forward
+const int rcin_cfg_roll_channel  = 5; //low pwm = left, high pwm = right
+const int rcin_cfg_pitch_channel = 4; //low pwm = pitch up/stick back, high pwm = pitch down/stick forward
+const int rcin_cfg_yaw_channel   = 2; //low pwm = left, high pwm = right
+const int rcin_cfg_arm_channel   = 1; //ARM/DISARM switch
 
 //throttle pwm values
-const int rcin_cfg_thro_low      = 1250; //used to set rcin_thro_is_low flag when pwm is below. Note: your craft won't arm if this is too low.
+const int rcin_cfg_thro_low      = 1350; //used to set rcin_thro_is_low flag when pwm is below. Note: your craft won't arm if this is too low.
 const int rcin_cfg_thro_max      = 1900;
 const float out_armed_speed      = 0.2; //Safety feature: make props spin when armed, the motors spin at this speed when armed and throttle is low. The default 0.2 is probably fairly high, set lower as needed.
 
@@ -123,11 +128,11 @@ const float out_armed_speed      = 0.2; //Safety feature: make props spin when a
 const int rcin_cfg_pwm_min       = 1150;
 const int rcin_cfg_pwm_center    = 1500;
 const int rcin_cfg_pwm_max       = 1900;
-const int rcin_cfg_pwm_deadband  = 0; //Amount of deadband around center, center-deadband to center+deadband will be interpreted as central stick. Set to 15 for PPM or 0 for jitter-free serial protocol receivers.
+const int rcin_cfg_pwm_deadband  = 50; //Amount of deadband around center, center-deadband to center+deadband will be interpreted as central stick. Set to 15 for PPM or 0 for jitter-free serial protocol receivers.
 
 //pwm range for arm switch in ARMED position
-const int rcin_cfg_arm_min       = 1600;
-const int rcin_cfg_arm_max       = 2200;
+const int rcin_cfg_arm_min       = 1100;
+const int rcin_cfg_arm_max       = 1600;
 
 //========================================================================================================================//
 //                                               USER-SPECIFIED VARIABLES                                                 //
@@ -242,7 +247,8 @@ void setup() {
   //Motors
   for(int i=0;i<out_MOTOR_COUNT;i++) {
     //uncomment one line - sets pin, frequency (Hz), minimum (us), maximum (us)
-    out[i].begin(HW_PIN_OUT[i], 400, 950, 2000); //Standard PWM: 400Hz, 950-2000 us
+    //out[i].begin(HW_PIN_OUT[i], 400, 950, 2000); //Standard PWM: 400Hz, 950-2000 us
+    out[i].begin(HW_PIN_OUT[i], 400, 10, 2000); //Standard PWM: 400Hz, 950-2000 us
     //out[i].begin(HW_PIN_OUT[i], 2000, 125, 250); //Oneshot125: 2000Hz, 125-250 us
 
     out_command[i] = 0; //set output to 0 for motors
@@ -296,7 +302,7 @@ void imu_loop() {
   rcin_Normalize(); //Convert raw commands to normalized values based on saturated control limits
 
   //Uncomment to debug without remote (and no battery!) - pitch drone up: motors m1,m3 should increase and m2,m4 decrease; bank right: m1,m2 increase; yaw right: m1,m4 increase
-  //rcin_thro = 0.5; rcin_thro_is_low = false; rcin_roll = 0; rcin_pitch = 0; rcin_yaw = 0; rcin_armed = true; rcin_aux = 0; out_armed = true;
+  rcin_thro = 0.5; rcin_thro_is_low = false; rcin_roll = 0; rcin_pitch = 0; rcin_yaw = 0; rcin_armed = true; rcin_aux = 0; out_armed = true;
 
   //PID Controller RATE or ANGLE - SELECT ONE:
   control_Rate(rcin_thro_is_low); //Stabilize on rate setpoint
@@ -398,7 +404,7 @@ void rcin_Normalize() {
 
   //arm switch
   pwm = rcin_pwm[rcin_cfg_arm_channel-1];
-  rcin_armed = (rcin_cfg_arm_min <= pwm && pwm <= rcin_cfg_arm_max);
+  //rcin_armed = (rcin_cfg_arm_min <= pwm && pwm <= rcin_cfg_arm_max);
 }
 
 //helper to nomalize a channel based on min,center,max calibration
@@ -571,7 +577,7 @@ void out_KillSwitchAndFailsafe() {
   }
 
   //Change to DISARMED when radio armed switch is in disarmed position, or if radio lost connection
-   if (out_armed && (!rcin_armed || !rcin.connected())) {
+   if (out_armed && (!rcin_armed)){// || !rcin.connected())) {
     out_armed = false;
     if(!rcin_armed) {
       Serial.println("OUT: DISARMED (arm switch)");
